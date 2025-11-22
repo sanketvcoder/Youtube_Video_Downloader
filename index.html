@@ -1,0 +1,283 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
+  <title>YouTube Downloader — Sanket</title>
+  <meta name="description" content="Local YouTube downloader UI with live progress (SSE/polling), responsive, mobile-first, and modern design." />
+  <style>
+    /* Reset & basics */
+    :root{
+      --bg-1:#041427; --bg-2:#071428; --card:#0f1724; --muted:#94a3b8; --accent:#06b6d4; --accent-2:#0ea5e9; --glass: rgba(255,255,255,0.03);
+      --success: #34d399; --danger:#fb7185; --glass-2: rgba(255,255,255,0.02);
+      --radius:14px; --shadow: 0 12px 40px rgba(2,6,23,0.6);
+      --max-width:1100px;
+    }
+    *{box-sizing:border-box}
+    html,body{height:100%;margin:0;font-family:Inter,-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,'Helvetica Neue',Arial; background:linear-gradient(180deg,var(--bg-1),var(--bg-2));color:#e6eef6;-webkit-font-smoothing:antialiased}
+    img{max-width:100%}
+
+    /* Layout */
+    .wrap{min-height:100vh;display:flex;align-items:center;justify-content:center;padding:28px}
+    .app{width:100%;max-width:var(--max-width)}
+    .card{background:linear-gradient(180deg,var(--glass-2), rgba(255,255,255,0.01));border-radius:var(--radius);padding:20px;border:1px solid rgba(255,255,255,0.03);box-shadow:var(--shadow)}
+
+    /* Header */
+    .hdr{display:flex;align-items:center;gap:14px}
+    .logo{width:56px;height:56px;border-radius:12px;display:flex;align-items:center;justify-content:center;background:linear-gradient(135deg,var(--accent),var(--accent-2));font-weight:800;color:#012}
+    .title h1{margin:0;font-size:18px}
+    .title p{margin:2px 0 0;color:var(--muted);font-size:13px}
+
+    /* Controls */
+    .controls{display:grid;grid-template-columns:1fr 220px 120px;gap:12px;margin-top:18px}
+    .input{display:flex;gap:10px}
+    .input input{flex:1;padding:12px 14px;border-radius:10px;border:1px solid rgba(255,255,255,0.04);background:transparent;color:inherit;font-size:14px}
+    .input .paste{background:transparent;border:1px dashed rgba(255,255,255,0.04);padding:8px 10px;border-radius:10px;color:var(--muted);cursor:pointer}
+
+    select, button{padding:12px;border-radius:10px;border:none;font-weight:700}
+    select{background:transparent;border:1px solid rgba(255,255,255,0.04);color:inherit}
+    button.primary{background:linear-gradient(90deg,var(--accent),var(--accent-2));color:#012;border-radius:10px;cursor:pointer}
+    button.ghost{background:transparent;border:1px solid rgba(255,255,255,0.04);color:var(--muted)}
+
+    /* Main panel */
+    .panel{display:grid;grid-template-columns:1fr 360px;gap:18px;margin-top:20px}
+    .left .card-block, .right .card-block{padding:16px;border-radius:12px;background:rgba(255,255,255,0.02)}
+
+    /* Video info */
+    .meta-top{display:flex;justify-content:space-between;align-items:flex-start;gap:12px}
+    .meta-left{flex:1}
+    .titleText{font-weight:700}
+    .small{font-size:13px;color:var(--muted)}
+
+    .thumb{width:100%;height:200px;background:#051022;border-radius:10px;display:flex;align-items:center;justify-content:center;color:var(--muted);overflow:hidden}
+
+    /* Progress */
+    .progress-wrap{margin-top:12px}
+    .progress{height:14px;background:rgba(255,255,255,0.03);border-radius:10px;overflow:hidden}
+    .progress > i{display:block;height:100%;width:0%;background:linear-gradient(90deg,var(--accent),var(--accent-2));transition:width 220ms linear}
+    .status-row{display:flex;justify-content:space-between;align-items:center;margin-top:8px}
+    .status-row .left{font-size:13px;color:var(--muted)}
+    .status-row .right{font-size:13px}
+
+    /* Extras */
+    .actions{display:flex;gap:8px;margin-top:12px}
+    .chip{padding:8px 10px;border-radius:999px;background:rgba(255,255,255,0.02);font-size:13px;color:var(--muted)}
+
+    /* History */
+    .history{margin-top:12px;display:flex;flex-direction:column;gap:8px}
+    .hist-item{display:flex;justify-content:space-between;align-items:center;padding:8px;border-radius:8px;background:rgba(0,0,0,0.12)}
+    .hist-item .left{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+    .hist-item .right{display:flex;gap:8px}
+
+    /* Footer */
+    .foot{display:flex;justify-content:space-between;align-items:center;margin-top:14px;color:var(--muted);font-size:13px}
+
+    /* Responsive */
+    @media (max-width:980px){
+      .controls{grid-template-columns:1fr 160px 100px}
+      .panel{grid-template-columns:1fr 300px}
+    }
+    @media (max-width:720px){
+      .controls{grid-template-columns:1fr 120px 90px}
+      .panel{grid-template-columns:1fr}
+      .right{order:2}
+    }
+    @media (max-width:420px){
+      .controls{grid-template-columns:1fr}
+      .controls > *{width:100%}
+      .actions{flex-direction:column}
+    }
+
+    /* subtle animations */
+    .fade-in{animation:fadeIn 360ms ease both}
+    @keyframes fadeIn{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:none}}
+
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <div class="app">
+      <div class="card fade-in">
+        <div class="hdr">
+          <div class="logo">YT</div>
+          <div class="title">
+            <h1>YouTube Downloader</h1>
+            <p class="lead">Paste a YouTube URL/ID, choose quality or audio-only, and get live progress (if server supports it).</p>
+          </div>
+        </div>
+
+        <div class="controls">
+          <div class="input">
+            <input id="urlInput" placeholder="Paste YouTube URL or video ID (e.g. dQw4w9WgXcQ)" aria-label="YouTube URL or ID" />
+            <button class="paste" id="pasteBtn" title="Paste from clipboard">📋</button>
+          </div>
+
+          <select id="quality" aria-label="Quality selector">
+            <option value="">Best available</option>
+            <option value="1080">1080p</option>
+            <option value="720">720p</option>
+            <option value="360">360p</option>
+          </select>
+
+          <div style="display:flex;gap:8px">
+            <button class="primary" id="downloadBtn">Download</button>
+            <button class="ghost" id="openBtn">Open</button>
+          </div>
+        </div>
+
+        <div class="panel">
+          <div class="left">
+            <div class="card-block">
+              <div class="meta-top">
+                <div class="meta-left">
+                  <div id="titleText" class="titleText">No video selected</div>
+                  <div id="channelText" class="small">—</div>
+                </div>
+                <div class="small">Server: <strong id="serverLabel">localhost:3000</strong></div>
+              </div>
+
+              <div class="progress-wrap">
+                <div class="progress" aria-hidden="true"><i id="progressBar"></i></div>
+                <div class="status-row">
+                  <div class="left"><span id="percentText">0%</span> • <span id="statusMsg">Ready</span></div>
+                  <div class="right small" id="speedEtaText">Idle</div>
+                </div>
+              </div>
+
+              <div class="actions">
+                <label class="chip"><input type="checkbox" id="audioOnly" style="margin-right:8px">Audio only (MP3)</label>
+                <button class="chip" id="copyLink">Copy download URL</button>
+                <button class="chip" id="clearHistory">Clear history</button>
+              </div>
+
+              <div class="history" id="history"></div>
+            </div>
+
+            <div class="foot">
+              <div class="small">Tip: double-click the title to insert a sample video id.</div>
+              <div class="small">Made for local use</div>
+            </div>
+          </div>
+
+          <aside class="right">
+            <div class="card-block">
+              <div id="thumb" class="thumb">Thumbnail</div>
+              <div style="margin-top:12px">
+                <div class="small">Filename preview</div>
+                <div id="filenamePreview" style="word-break:break-all;font-weight:700;margin-top:6px">—</div>
+              </div>
+            </div>
+          </aside>
+        </div>
+
+      </div>
+    </div>
+  </div>
+
+  <iframe id="dlFrame" style="display:none;width:0;height:0;border:0"></iframe>
+
+  <script>
+    // Modern, dynamic frontend with SSE + polling fallback
+    (function(){
+      const SERVER = location.hostname === 'localhost' || location.hostname === '127.0.0.1' ? `${location.protocol}//${location.hostname}:3000` : `${location.protocol}//${location.host}`;
+
+      // Elements
+      const urlInput = document.getElementById('urlInput');
+      const pasteBtn = document.getElementById('pasteBtn');
+      const downloadBtn = document.getElementById('downloadBtn');
+      const openBtn = document.getElementById('openBtn');
+      const qualityEl = document.getElementById('quality');
+      const progressBar = document.getElementById('progressBar');
+      const percentText = document.getElementById('percentText');
+      const speedEtaText = document.getElementById('speedEtaText');
+      const statusMsg = document.getElementById('statusMsg');
+      const titleText = document.getElementById('titleText');
+      const channelText = document.getElementById('channelText');
+      const thumb = document.getElementById('thumb');
+      const filenamePreview = document.getElementById('filenamePreview');
+      const historyEl = document.getElementById('history');
+      const audioOnlyEl = document.getElementById('audioOnly');
+      const copyLinkBtn = document.getElementById('copyLink');
+      const clearHistoryBtn = document.getElementById('clearHistory');
+      const dlFrame = document.getElementById('dlFrame');
+
+      let sse = null; let pollingInterval = null; let currentTask = null;
+
+      // Helpers
+      function setStatus(msg, err=false){ statusMsg.textContent = msg; statusMsg.style.color = err? 'var(--danger)': '' }
+      function setProgress(p, speed, eta, msg){ progressBar.style.width = Math.max(0,Math.min(100,p||0))+'%'; percentText.textContent = (Math.round((p||0)*10)/10)+'%'; speedEtaText.textContent = (speed?speed:'') + (eta?(' • ETA '+eta):'') + (msg?(' • '+msg):''); }
+      function resetProgress(){ setProgress(0,'','', 'Idle'); }
+
+      function normalizeYouTube(input){ if(!input) return null; input = input.trim(); const idOnly = input.match(/^([A-Za-z0-9_-]{11})$/); if(idOnly) return `https://www.youtube.com/watch?v=${idOnly[1]}`; try{ const u = new URL(input.includes('://')?input:('https://'+input)); if(u.hostname.includes('youtu.be')){ const id = u.pathname.replace(/^\//,'').split(/[?#]/)[0]; if(id) return `https://www.youtube.com/watch?v=${id}` } if(u.hostname.includes('youtube.com')||u.hostname.includes('youtube-nocookie.com')){ const v = u.searchParams.get('v'); if(v) return `https://www.youtube.com/watch?v=${v}`; const s = u.pathname.match(/\/shorts\/([A-Za-z0-9_-]{6,11})/); if(s) return `https://www.youtube.com/watch?v=${s[1]}`; const last = u.pathname.split('/').filter(Boolean).pop(); if(last && /^[A-Za-z0-9_-]{6,11}$/.test(last)) return `https://www.youtube.com/watch?v=${last}` } }catch(e){} const rx = /(?:v=|\/watch\?v=|youtu\.be\/|\/shorts\/)([A-Za-z0-9_-]{6,11})/; const m = input.match(rx); if(m&&m[1]) return `https://www.youtube.com/watch?v=${m[1]}`; return null }
+
+      async function fetchOEmbed(u){ try{ const o = `https://www.youtube.com/oembed?url=${encodeURIComponent(u)}&format=json`; const r = await fetch(o); if(!r.ok) throw new Error('oembed fail'); return await r.json(); }catch(e){ return null } }
+
+      // History (localStorage)
+      function loadHistory(){ try{ return JSON.parse(localStorage.getItem('yt_history')||'[]') }catch(e){ return [] } }
+      function saveHistory(arr){ localStorage.setItem('yt_history', JSON.stringify(arr)); renderHistory(); }
+      function pushHistory(item){ const arr = loadHistory(); arr.unshift(item); if(arr.length>12) arr.pop(); saveHistory(arr); }
+      function clearHistory(){ localStorage.removeItem('yt_history'); renderHistory(); }
+      function renderHistory(){ const arr = loadHistory(); historyEl.innerHTML = ''; if(!arr.length){ historyEl.innerHTML = '<div class="small">No recent downloads</div>'; return } for(const it of arr){ const div = document.createElement('div'); div.className='hist-item'; div.innerHTML = `<div class='left' title='${it.url}'>${it.title||it.url}</div><div class='right'><button class='chip' data-url='${it.url}'>Download</button></div>`; historyEl.appendChild(div); div.querySelector('button').addEventListener('click',()=>{ urlInput.value = it.url; startDownload(); }); } }
+
+      // UI wiring
+      pasteBtn.addEventListener('click', async ()=>{ try{ const txt = await navigator.clipboard.readText(); urlInput.value = txt; setStatus('Pasted from clipboard'); }catch(e){ setStatus('Clipboard paste failed', true) } });
+      clearHistoryBtn.addEventListener('click', ()=>{ clearHistory(); setStatus('History cleared') });
+      copyLinkBtn.addEventListener('click', ()=>{ const raw = urlInput.value.trim(); const normalized = normalizeYouTube(raw); if(!normalized){ setStatus('Enter URL first', true); return; } const q = qualityEl.value; const params = new URLSearchParams({ url: normalized }); if(q) params.set('quality', q); navigator.clipboard.writeText(`${SERVER}/download?${params.toString()}`).then(()=> setStatus('Download link copied'));
+      });
+
+      // History render initially
+      renderHistory();
+
+      // Start download: attempts to create a server task via POST /tasks/start. If not available, fall back to opening download iframe.
+      async function startDownload(){
+        const raw = urlInput.value.trim(); if(!raw){ setStatus('Please enter URL/ID', true); return; }
+        const normalized = normalizeYouTube(raw); if(!normalized){ setStatus('Could not parse URL/ID', true); return; }
+
+        // show oEmbed info
+        const info = await fetchOEmbed(normalized);
+        if(info){ titleText.textContent = info.title; channelText.textContent = info.author_name; thumb.style.backgroundImage = `url(${info.thumbnail_url})`; filenamePreview.textContent = `${info.title.replace(/[^a-z0-9-_. ]/gi,'').slice(0,120)}${audioOnlyEl.checked?'.mp3':'.mp4'}`; } else { titleText.textContent='Video'; channelText.textContent=''; thumb.style.backgroundImage=''; filenamePreview.textContent = audioOnlyEl.checked? 'audio.mp3':'video.mp4'; }
+
+        resetProgress(); setStatus('Starting...');
+
+        // Attempt to start server-side task
+        try{
+          const resp = await fetch(`${SERVER}/tasks/start`, { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ url: normalized, quality: qualityEl.value, audioOnly: audioOnlyEl.checked })});
+          if(resp.ok){ const body = await resp.json(); if(body.taskId){ currentTask = body.taskId; setStatus('Task created — connecting to live updates'); connectSSE(currentTask); pushHistory({ url: normalized, title: info?.title||normalized, created:new Date().toISOString() }); // open download link in new tab
+                window.open(`${SERVER}/download?url=${encodeURIComponent(normalized)}&quality=${encodeURIComponent(qualityEl.value)}${audioOnlyEl.checked? '&audio=true':''}`, '_blank'); return; } }
+        }catch(e){ /* server may not implement tasks/start */ }
+
+        // fallback: just open in iframe (or new tab)
+        const params = new URLSearchParams({ url: normalized }); if(qualityEl.value) params.set('quality', qualityEl.value); if(audioOnlyEl.checked) params.set('audio','true'); const dlUrl = `${SERVER}/download?${params.toString()}`;
+        dlFrame.src = dlUrl; setStatus('Download started — if it fails, check server logs'); pushHistory({ url: normalized, title: info?.title||normalized, created:new Date().toISOString() });
+      }
+
+      // SSE connection + polling fallback
+      function connectSSE(taskId){ if(sse) try{ sse.close(); }catch(e){} sse = null; if(pollingInterval) { clearInterval(pollingInterval); pollingInterval=null; }
+        try{
+          sse = new EventSource(`${SERVER}/tasks/${taskId}/events`);
+        }catch(e){ setStatus('SSE not available, will poll for progress', true); startPolling(taskId); return; }
+        sse.onmessage = (e)=>{ try{ const d = JSON.parse(e.data); if(d.type==='progress'){ const p = d.payload || {}; setProgress(p.percent || 0, p.speed||'', p.eta||'', p.message||''); setStatus('Downloading — live'); } else if(d.type==='status'){ setStatus(d.payload?.message || ''); } }catch(err){ console.warn('sse parse', err); } };
+        sse.onerror = (ev)=>{ console.warn('sse error', ev); setStatus('SSE closed — polling instead', true); try{ sse.close(); }catch(e){} sse=null; startPolling(taskId); };
+      }
+
+      function startPolling(taskId){ if(pollingInterval) clearInterval(pollingInterval); pollingInterval = setInterval(async ()=>{ try{ const r = await fetch(`${SERVER}/tasks/${taskId}`); if(!r.ok) return; const j = await r.json(); if(j.percent!=null) setProgress(j.percent, j.speed||'', j.eta||'', j.message||''); if(j.status==='finished'){ setStatus('Finished'); clearInterval(pollingInterval); pollingInterval=null; } if(j.status==='failed'){ setStatus('Failed: '+(j.message||'unknown'), true); clearInterval(pollingInterval); pollingInterval=null; } }catch(e){ console.warn('polling err', e); } }, 1500); }
+
+      // open in new tab
+      openBtn.addEventListener('click', ()=>{ const raw=urlInput.value.trim(); const normalized = normalizeYouTube(raw); if(!normalized){ setStatus('Enter URL first', true); return; } const params = new URLSearchParams({ url: normalized }); if(qualityEl.value) params.set('quality', qualityEl.value); if(audioOnlyEl.checked) params.set('audio','true'); window.open(`${SERVER}/download?${params.toString()}`, '_blank'); setStatus('Opened in new tab'); });
+
+      // download btn
+      downloadBtn.addEventListener('click', ()=> startDownload());
+
+      // allow double click on title to insert sample id
+      titleText.addEventListener('dblclick', ()=>{ urlInput.value = 'dQw4w9WgXcQ'; setStatus('Sample inserted'); });
+
+      // initially reset
+      resetProgress();
+
+      // expose startDownload for console/testing
+      window.startDownload = startDownload;
+
+    })();
+  </script>
+</body>
+</html>
